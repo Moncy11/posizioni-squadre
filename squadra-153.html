@@ -22,7 +22,7 @@
     .btn-gps { width: 100%; padding: 18px; border-radius: 14px; border: none; background: linear-gradient(135deg, #1a73e8, #1558c0); color: #fff; font-size: 1.05rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity 0.2s, transform 0.15s; box-shadow: 0 4px 16px rgba(26,115,232,0.35); }
     .btn-gps:active { opacity: 0.85; transform: scale(0.98); }
     .btn-gps:disabled { background: #2a3a50; color: #4a6080; cursor: default; box-shadow: none; }
-    .status { font-size: 0.85rem; border-radius: 10px; padding: 12px 16px; margin-top: 16px; display: none; line-height: 1.5; }
+    .status { font-size: 0.85rem; border-radius: 10px; padding: 12px 16px; margin-top: 16px; display: none; line-height: 1.5; white-space: pre-line; }
     .status.errore { color: #e74c3c; background: #2a0d0d; }
     .status.avviso { color: #f39c12; background: #2a1f00; }
     .status.visible { display: block; }
@@ -56,7 +56,6 @@
   </button>
   <div class="status" id="statusBox"></div>
 </div>
-
 <div class="sending-overlay" id="overlay">
   <div class="spinner" id="spinner"></div>
   <div class="sending-label" id="sendingLabel">Rilevamento GPS...</div>
@@ -67,7 +66,6 @@
     <p class="success-ora" id="successOra"></p>
   </div>
 </div>
-
 <script>
   const NUMERO_SQUADRA = "153";
   const WEBAPP_URL     = "https://script.google.com/macros/s/AKfycbxucgPCD03M3pWcyPwd6wvKcIfbURxUGp0YFAtT7Z1se7CGlQOjTCYfeok7krz4Kqt-Qg/exec";
@@ -79,7 +77,7 @@
   }
 
   function rilevaPosizione() {
-    if (!navigator.geolocation) { mostraStatus("GPS non disponibile su questo dispositivo.", "errore"); return; }
+    if (!navigator.geolocation) { mostraStatus("GPS non disponibile.", "errore"); return; }
     const btn = document.getElementById("btnGps");
     btn.disabled = true;
     document.getElementById("statusBox").className = "status";
@@ -94,35 +92,7 @@
         const lat = pos.coords.latitude.toFixed(6);
         const lon = pos.coords.longitude.toFixed(6);
         document.getElementById("sendingLabel").textContent = "Invio in corso...";
-
-        const url = WEBAPP_URL + "?squadra=" + encodeURIComponent(NUMERO_SQUADRA)
-                  + "&lat=" + lat + "&lon=" + lon;
-
-        fetch(url)
-          .then(r => r.json())
-          .then(data => {
-            document.getElementById("overlay").classList.remove("visible");
-            btn.disabled = false;
-            if (data.ok) {
-              document.getElementById("overlay").classList.add("visible");
-              document.getElementById("spinner").style.display = "none";
-              document.getElementById("sendingLabel").style.display = "none";
-              document.getElementById("successBox").classList.add("visible");
-              document.getElementById("successCoords").textContent = "&#x1F4CD; " + lat + ", " + lon;
-              document.getElementById("successOra").textContent = "Registrata alle " + data.ora;
-              setTimeout(() => { document.getElementById("overlay").classList.remove("visible"); }, 3000);
-            } else if (data.msg === "già_inviato") {
-              mostraStatus("Posizione già inviata oggi.
-Per correggere contatta l’ufficio.", "avviso");
-            } else {
-              mostraStatus("Errore: " + data.msg, "errore");
-            }
-          })
-          .catch(() => {
-            document.getElementById("overlay").classList.remove("visible");
-            btn.disabled = false;
-            mostraStatus("Errore di connessione. Controlla la rete e riprova.", "errore");
-          });
+        chiamaWebApp(lat, lon, btn);
       },
       function(err) {
         document.getElementById("overlay").classList.remove("visible");
@@ -134,6 +104,47 @@ Per correggere contatta l’ufficio.", "avviso");
       },
       { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
     );
+  }
+
+  function chiamaWebApp(lat, lon, btn) {
+    const callbackName = "cb_" + Date.now();
+    const script = document.createElement("script");
+
+    window[callbackName] = function(data) {
+      document.getElementById("overlay").classList.remove("visible");
+      btn.disabled = false;
+      delete window[callbackName];
+      if (script.parentNode) document.body.removeChild(script);
+
+      if (data.ok) {
+        document.getElementById("overlay").classList.add("visible");
+        document.getElementById("spinner").style.display = "none";
+        document.getElementById("sendingLabel").style.display = "none";
+        document.getElementById("successBox").classList.add("visible");
+        document.getElementById("successCoords").textContent = "\uD83D\uDCCD " + lat + ", " + lon;
+        document.getElementById("successOra").textContent = "Registrata alle " + data.ora;
+        setTimeout(function() { document.getElementById("overlay").classList.remove("visible"); }, 3000);
+      } else if (data.msg === "gi\u00e0_inviato") {
+        mostraStatus("Posizione gi\u00e0 inviata oggi.\nPer correggere contatta l\u2019ufficio.", "avviso");
+      } else {
+        mostraStatus("Errore: " + data.msg, "errore");
+      }
+    };
+
+    script.onerror = function() {
+      document.getElementById("overlay").classList.remove("visible");
+      btn.disabled = false;
+      if (script.parentNode) document.body.removeChild(script);
+      mostraStatus("Errore di connessione. Controlla la rete e riprova.", "errore");
+    };
+
+    script.src = WEBAPP_URL
+      + "?squadra=" + encodeURIComponent(NUMERO_SQUADRA)
+      + "&lat=" + lat
+      + "&lon=" + lon
+      + "&callback=" + callbackName;
+
+    document.body.appendChild(script);
   }
 </script>
 </body>

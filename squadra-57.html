@@ -22,7 +22,9 @@
     .btn-gps { width: 100%; padding: 18px; border-radius: 14px; border: none; background: linear-gradient(135deg, #1a73e8, #1558c0); color: #fff; font-size: 1.05rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity 0.2s, transform 0.15s; box-shadow: 0 4px 16px rgba(26,115,232,0.35); }
     .btn-gps:active { opacity: 0.85; transform: scale(0.98); }
     .btn-gps:disabled { background: #2a3a50; color: #4a6080; cursor: default; box-shadow: none; }
-    .status { font-size: 0.82rem; color: #e74c3c; background: #2a0d0d; border-radius: 8px; padding: 10px 14px; margin-top: 16px; display: none; line-height: 1.4; }
+    .status { font-size: 0.85rem; border-radius: 10px; padding: 12px 16px; margin-top: 16px; display: none; line-height: 1.5; white-space: pre-line; }
+    .status.errore { color: #e74c3c; background: #2a0d0d; }
+    .status.avviso { color: #f39c12; background: #2a1f00; }
     .status.visible { display: block; }
     .sending-overlay { display: none; position: fixed; inset: 0; background: rgba(13,27,42,0.95); align-items: center; justify-content: center; flex-direction: column; gap: 16px; z-index: 100; }
     .sending-overlay.visible { display: flex; }
@@ -35,6 +37,7 @@
     .check-circle svg { width: 36px; height: 36px; stroke: #27ae60; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
     .success-title { font-size: 1.2rem; font-weight: 700; }
     .success-coords { font-size: 0.8rem; color: #4a8050; font-family: monospace; }
+    .success-ora { font-size: 0.8rem; color: #7a93b0; }
   </style>
 </head>
 <body>
@@ -60,61 +63,88 @@
     <div class="check-circle"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
     <p class="success-title">Posizione inviata!</p>
     <p class="success-coords" id="successCoords"></p>
+    <p class="success-ora" id="successOra"></p>
   </div>
 </div>
 <script>
   const NUMERO_SQUADRA = "57";
-  const FORM_URL       = "https://docs.google.com/forms/d/e/1FAIpQLSeaUiLlSt5eTxGfiKRQOxJNnxozdgGpJQ_m5QjdyKGc2jtBFg/viewform";
-  const ENTRY_NUMERO   = "entry.1524287506";
-  const ENTRY_GPS      = "entry.1250991781";
+  const WEBAPP_URL     = "https://script.google.com/macros/s/AKfycbxucgPCD03M3pWcyPwd6wvKcIfbURxUGp0YFAtT7Z1se7CGlQOjTCYfeok7krz4Kqt-Qg/exec";
 
-  function mostraErrore(msg) {
+  function mostraStatus(msg, tipo) {
     const box = document.getElementById("statusBox");
     box.textContent = msg;
-    box.classList.add("visible");
+    box.className = "status " + tipo + " visible";
   }
 
   function rilevaPosizione() {
-    if (!navigator.geolocation) { mostraErrore("GPS non disponibile su questo dispositivo."); return; }
+    if (!navigator.geolocation) { mostraStatus("GPS non disponibile.", "errore"); return; }
     const btn = document.getElementById("btnGps");
     btn.disabled = true;
-    document.getElementById("statusBox").classList.remove("visible");
+    document.getElementById("statusBox").className = "status";
     document.getElementById("overlay").classList.add("visible");
     document.getElementById("spinner").style.display = "block";
     document.getElementById("sendingLabel").style.display = "block";
     document.getElementById("sendingLabel").textContent = "Rilevamento GPS...";
     document.getElementById("successBox").classList.remove("visible");
+
     navigator.geolocation.getCurrentPosition(
       function(pos) {
-        const coords = pos.coords.latitude.toFixed(6) + ", " + pos.coords.longitude.toFixed(6);
+        const lat = pos.coords.latitude.toFixed(6);
+        const lon = pos.coords.longitude.toFixed(6);
         document.getElementById("sendingLabel").textContent = "Invio in corso...";
-        const url = FORM_URL.replace("viewform","formResponse")
-          + "?" + ENTRY_NUMERO + "=" + encodeURIComponent(NUMERO_SQUADRA)
-          + "&" + ENTRY_GPS    + "=" + encodeURIComponent(coords)
-          + "&submit=Submit";
-        fetch(url, { method:"GET", mode:"no-cors" }).finally(() => mostraSuccesso(coords, btn));
+        chiamaWebApp(lat, lon, btn);
       },
       function(err) {
         document.getElementById("overlay").classList.remove("visible");
         btn.disabled = false;
-        const msg = err.code===1 ? "Permesso GPS negato. Vai nelle impostazioni e abilita la posizione per questo browser."
-                  : err.code===2 ? "Posizione non disponibile. Assicurati di avere il GPS attivo e riprova."
+        const msg = err.code===1 ? "Permesso GPS negato. Vai nelle impostazioni e abilita la posizione."
+                  : err.code===2 ? "Posizione non disponibile. Assicurati di avere il GPS attivo."
                   : "Timeout GPS. Spostati all’aperto e riprova.";
-        mostraErrore(msg);
+        mostraStatus(msg, "errore");
       },
       { enableHighAccuracy:true, timeout:15000, maximumAge:0 }
     );
   }
 
-  function mostraSuccesso(coords, btn) {
-    document.getElementById("spinner").style.display = "none";
-    document.getElementById("sendingLabel").style.display = "none";
-    document.getElementById("successBox").classList.add("visible");
-    document.getElementById("successCoords").textContent = "&#x1F4CD; " + coords;
-    setTimeout(() => {
+  function chiamaWebApp(lat, lon, btn) {
+    const callbackName = "cb_" + Date.now();
+    const script = document.createElement("script");
+
+    window[callbackName] = function(data) {
       document.getElementById("overlay").classList.remove("visible");
       btn.disabled = false;
-    }, 3000);
+      delete window[callbackName];
+      if (script.parentNode) document.body.removeChild(script);
+
+      if (data.ok) {
+        document.getElementById("overlay").classList.add("visible");
+        document.getElementById("spinner").style.display = "none";
+        document.getElementById("sendingLabel").style.display = "none";
+        document.getElementById("successBox").classList.add("visible");
+        document.getElementById("successCoords").textContent = "\uD83D\uDCCD " + lat + ", " + lon;
+        document.getElementById("successOra").textContent = "Registrata alle " + data.ora;
+        setTimeout(function() { document.getElementById("overlay").classList.remove("visible"); }, 3000);
+      } else if (data.msg === "gi\u00e0_inviato") {
+        mostraStatus("Posizione gi\u00e0 inviata oggi.\nPer correggere contatta l\u2019ufficio.", "avviso");
+      } else {
+        mostraStatus("Errore: " + data.msg, "errore");
+      }
+    };
+
+    script.onerror = function() {
+      document.getElementById("overlay").classList.remove("visible");
+      btn.disabled = false;
+      if (script.parentNode) document.body.removeChild(script);
+      mostraStatus("Errore di connessione. Controlla la rete e riprova.", "errore");
+    };
+
+    script.src = WEBAPP_URL
+      + "?squadra=" + encodeURIComponent(NUMERO_SQUADRA)
+      + "&lat=" + lat
+      + "&lon=" + lon
+      + "&callback=" + callbackName;
+
+    document.body.appendChild(script);
   }
 </script>
 </body>
