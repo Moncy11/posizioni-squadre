@@ -79,6 +79,7 @@
   </button>
 
   <div class="status" id="statusBox"></div>
+  <a href="#" id="linkReset" onclick="reimpostaPin(); return false;" style="display:none; color:#4a8ab0; font-size:0.78rem; margin-top:14px; text-decoration:underline;">Reimposta PIN</a>
 </div>
 
 <div class="sending-overlay" id="overlay">
@@ -121,9 +122,11 @@
     if (token) {
       document.getElementById("btnGps").style.display = "flex";
       document.getElementById("pinBox").classList.remove("visible");
+      document.getElementById("linkReset").style.display = "inline";
     } else {
       document.getElementById("pinBox").classList.add("visible");
       document.getElementById("btnGps").style.display = "none";
+      document.getElementById("linkReset").style.display = "none";
       document.getElementById("subtitleText").innerHTML = "Registra questo telefono la prima volta,<br>poi userai solo il pulsante GPS.";
     }
   };
@@ -177,6 +180,13 @@
       + "&callback=" + callbackName;
 
     document.body.appendChild(script);
+  }
+
+  function reimpostaPin() {
+    if (confirm("Vuoi davvero reimpostare il PIN su questo telefono? Dovrai registrarlo di nuovo.")) {
+      localStorage.removeItem(CHIAVE_TOKEN);
+      location.reload();
+    }
   }
 
   function rilevaPosizione() {
