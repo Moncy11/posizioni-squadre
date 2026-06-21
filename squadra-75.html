@@ -21,10 +21,13 @@
     .icon-wrap { width: 72px; height: 72px; border-radius: 18px; background: linear-gradient(135deg, #1a73e8, #0d47a1); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; box-shadow: 0 4px 20px rgba(26,115,232,0.4); }
     .icon-wrap svg { width: 38px; height: 38px; fill: #fff; }
     h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 6px; }
-    .subtitle { font-size: 0.85rem; color: #7a93b0; margin-bottom: 28px; line-height: 1.5; }
+    .subtitle { font-size: 0.85rem; color: #7a93b0; margin-bottom: 20px; line-height: 1.5; }
     .squadra-label { font-size: 0.75rem; color: #4a8ab0; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
     .squadra-nome { font-size: 1rem; font-weight: 700; color: #fff; background: #1e3050; border-radius: 10px; padding: 10px 16px; margin-bottom: 8px; }
-    .ambito-badge { font-size: 0.75rem; color: #4a8ab0; margin-bottom: 24px; }
+    .ambito-badge { font-size: 0.75rem; color: #4a8ab0; margin-bottom: 16px; }
+    .stato-oggi { display: none; background: #14301f; border: 1px solid #1f4a30; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 0.82rem; color: #6fe0a8; text-align: left; line-height: 1.5; }
+    .stato-oggi.visible { display: block; }
+    .stato-oggi strong { color: #9ef0c4; }
     .btn-gps { width: 100%; padding: 18px; border-radius: 14px; border: none; background: linear-gradient(135deg, #1a73e8, #1558c0); color: #fff; font-size: 1.05rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: opacity 0.2s, transform 0.15s; box-shadow: 0 4px 16px rgba(26,115,232,0.35); }
     .btn-gps:active { opacity: 0.85; transform: scale(0.98); }
     .btn-gps:disabled { background: #2a3a50; color: #4a6080; cursor: default; box-shadow: none; }
@@ -57,13 +60,15 @@
 <body>
 <div class="card">
   <div class="icon-wrap">
-    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+    <svg viewBox="0 0 24 24"><path fill="#ffffff" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
   </div>
   <h1>Invia Posizione</h1>
   <p class="subtitle" id="subtitleText">Premi il pulsante ogni mattina<br>per inviare la tua posizione.</p>
   <p class="squadra-label">Squadra</p>
   <div class="squadra-nome">75 &ndash; PINEROLESE – VAL SANGONE</div>
   <div class="ambito-badge">Ambito TO 3</div>
+
+  <div class="stato-oggi" id="statoOggi"></div>
 
   <!-- Casella PIN, visibile solo se il dispositivo non è registrato -->
   <div class="pin-box" id="pinBox">
@@ -116,6 +121,43 @@
     box.className = "status " + tipo + " visible";
   }
 
+  function reimpostaPin() {
+    if (confirm("Vuoi davvero reimpostare il PIN su questo telefono? Dovrai registrarlo di nuovo.")) {
+      localStorage.removeItem(CHIAVE_TOKEN);
+      location.reload();
+    }
+  }
+
+  // Controlla se la squadra ha già inviato posizioni oggi, e le mostra
+  function controllaStatoOggi() {
+    const callbackName = "cbStato_" + Date.now();
+    const script = document.createElement("script");
+
+    window[callbackName] = function(data) {
+      delete window[callbackName];
+      if (script.parentNode) document.body.removeChild(script);
+
+      if (data.ok && data.inviiOggi && data.inviiOggi.length > 0) {
+        const box = document.getElementById("statoOggi");
+        const numInvii = data.inviiOggi.length;
+        const elencoOrari = data.inviiOggi.join(", ");
+        if (numInvii === 1) {
+          box.innerHTML = "&#x2713; <strong>Hai gi\u00e0 inviato la posizione oggi</strong><br>alle " + elencoOrari;
+        } else {
+          box.innerHTML = "&#x2713; <strong>Hai gi\u00e0 inviato " + numInvii + " posizioni oggi</strong><br>alle " + elencoOrari;
+        }
+        box.classList.add("visible");
+      }
+    };
+
+    script.onerror = function() {
+      if (script.parentNode) document.body.removeChild(script);
+    };
+
+    script.src = WEBAPP_URL + "?azione=statoMiaSquadra&squadra=" + encodeURIComponent(NUMERO_SQUADRA) + "&callback=" + callbackName;
+    document.body.appendChild(script);
+  }
+
   // All'avvio, decide se mostrare PIN o pulsante GPS
   window.onload = function() {
     const token = getToken();
@@ -123,6 +165,7 @@
       document.getElementById("btnGps").style.display = "flex";
       document.getElementById("pinBox").classList.remove("visible");
       document.getElementById("linkReset").style.display = "inline";
+      controllaStatoOggi();
     } else {
       document.getElementById("pinBox").classList.add("visible");
       document.getElementById("btnGps").style.display = "none";
@@ -154,8 +197,10 @@
         setToken(nuovoToken);
         document.getElementById("pinBox").classList.remove("visible");
         document.getElementById("btnGps").style.display = "flex";
+        document.getElementById("linkReset").style.display = "inline";
         document.getElementById("subtitleText").innerHTML = "Premi il pulsante ogni mattina<br>per inviare la tua posizione.";
         mostraStatus("Telefono registrato correttamente!", "avviso");
+        controllaStatoOggi();
       } else if (data.msg === "PIN errato") {
         mostraStatus("PIN errato. Controlla e riprova.", "errore");
       } else if (data.msg === "limite_dispositivi") {
@@ -180,13 +225,6 @@
       + "&callback=" + callbackName;
 
     document.body.appendChild(script);
-  }
-
-  function reimpostaPin() {
-    if (confirm("Vuoi davvero reimpostare il PIN su questo telefono? Dovrai registrarlo di nuovo.")) {
-      localStorage.removeItem(CHIAVE_TOKEN);
-      location.reload();
-    }
   }
 
   function rilevaPosizione() {
@@ -238,6 +276,7 @@
         document.getElementById("successCoords").textContent = "\uD83D\uDCCD " + lat + ", " + lon;
         document.getElementById("successOra").textContent = "Registrata alle " + data.ora;
         setTimeout(function() { document.getElementById("overlay").classList.remove("visible"); }, 3000);
+        controllaStatoOggi();
       } else if (data.msg === "dispositivo_non_autorizzato") {
         mostraStatus("Questo telefono non \u00e8 registrato per questa squadra. Contatta l'ufficio.", "errore");
       } else {
